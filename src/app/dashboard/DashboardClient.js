@@ -6,17 +6,25 @@ import { encrypt, decrypt } from '@/lib/crypto';
 import Navbar from '@/components/Navbar';
 import PasswordCard from '@/components/PasswordCard';
 import AddPasswordModal from '@/components/AddPasswordModal';
+import AddLegacyModal from '@/components/AddLegacyModal';
+import LegacyCard from '@/components/LegacyCard';
 
 export default function DashboardClient({ userEmail, userId }) {
   const [supabase] = useState(() => createClient());
   const [passwords, setPasswords] = useState([]);
+  const [legacyShares, setLegacyShares] = useState([]);
+  
   const [search, setSearch] = useState('');
-  const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  
   const [masterKey, setMasterKey] = useState('');
   const [showMasterKeyPrompt, setShowMasterKeyPrompt] = useState(true);
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  
+  const [activeTab, setActiveTab] = useState('vault'); // 'vault' or 'legacy'
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showLegacyModal, setShowLegacyModal] = useState(false);
 
   // Show a toast notification
   function showToast(message, type = 'success') {
@@ -24,86 +32,112 @@ export default function DashboardClient({ userEmail, userId }) {
     setTimeout(() => setToast(null), 3000);
   }
 
-  // Fetch passwords when vault is unlocked
+  // Fetch data when vault is unlocked
   useEffect(() => {
     if (!vaultUnlocked) return;
     let cancelled = false;
 
-    async function loadPasswords() {
-      const { data, error } = await supabase
+    async function loadData() {
+      // 1. Fetch Passwords
+      const { data: passData, error: passErr } = await supabase
         .from('passwords')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (cancelled) return;
+      if (passErr) showToast('Failed to load passwords', 'error');
+      
+      // 2. Fetch Legacy Shares
+      const { data: legacyData, error: legErr } = await supabase
+        .from('legacy_shares')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        showToast('Failed to load passwords', 'error');
-      } else {
-        setPasswords(data || []);
+      if (legErr) showToast('Failed to load legacy shares', 'error');
+
+      if (!cancelled) {
+        if (passData) setPasswords(passData);
+        if (legacyData) {
+          setLegacyShares(legacyData);
+          
+          // Update last_active_at for all pending shares since user just logged in
+          const pendingIds = legacyData.filter(s => s.status === 'pending').map(s => s.id);
+          if (pendingIds.length > 0) {
+            await supabase.from('legacy_shares')
+              .update({ last_active_at: new Date().toISOString() })
+              .in('id', pendingIds);
+          }
+        }
+        setLoading(false);
       }
-      setLoading(false);
     }
 
-    loadPasswords();
+    loadData();
     return () => { cancelled = true; };
   }, [vaultUnlocked, supabase]);
 
-  // Decrypt a password
+  // ---------- VAULT ACTIONS ----------
   async function handleDecrypt(ciphertext, iv) {
     return await decrypt(ciphertext, iv, masterKey);
   }
 
-  // Add a new password
-  async function handleAdd({ siteName, siteUrl, username, password, notes }) {
+  async function handleAddPassword({ siteName, siteUrl, username, password, notes }) {
     const { ciphertext, iv } = await encrypt(password, masterKey);
-
     const { error } = await supabase.from('passwords').insert({
-      user_id: userId,
-      site_name: siteName,
-      site_url: siteUrl || null,
-      username,
-      encrypted_password: ciphertext,
-      iv,
-      notes: notes || null,
+      user_id: userId, site_name: siteName, site_url: siteUrl || null,
+      username, encrypted_password: ciphertext, iv, notes: notes || null,
     });
 
-    if (error) {
-      showToast('Failed to save password', 'error');
-      throw error;
-    }
-
+    if (error) throw error;
     showToast('Password saved successfully!');
-
-    // Re-fetch passwords
-    const { data } = await supabase
-      .from('passwords')
-      .select('*')
-      .order('created_at', { ascending: false });
+    
+    // Refresh
+    const { data } = await supabase.from('passwords').select('*').order('created_at', { ascending: false });
     if (data) setPasswords(data);
   }
 
-  // Delete a password
-  async function handleDelete(id) {
+  async function handleDeletePassword(id) {
     if (!confirm('Delete this password entry?')) return;
-
     const { error } = await supabase.from('passwords').delete().eq('id', id);
-
-    if (error) {
-      showToast('Failed to delete', 'error');
-    } else {
-      showToast('Password deleted');
-      setPasswords((prev) => prev.filter((p) => p.id !== id));
-    }
+    if (error) { showToast('Failed to delete', 'error'); } 
+    else { showToast('Password deleted'); setPasswords(prev => prev.filter(p => p.id !== id)); }
   }
 
-  // Logout
+  // ---------- LEGACY SHARES ACTIONS ----------
+  async function handleAddLegacy({ recipient, message, passphrase, timerInterval }) {
+    // Encrypt the legacy message using the generated passphrase (not the master key!)
+    const { ciphertext, iv } = await encrypt(message, passphrase);
+    
+    const { error } = await supabase.from('legacy_shares').insert({
+      user_id: userId,
+      recipient_email: recipient,
+      encrypted_payload: ciphertext,
+      iv: iv,
+      timer_interval: timerInterval,
+      status: 'pending',
+      last_active_at: new Date().toISOString()
+    });
+
+    if (error) throw error;
+    showToast('Legacy Share created securely!');
+    
+    // Refresh
+    const { data } = await supabase.from('legacy_shares').select('*').order('created_at', { ascending: false });
+    if (data) setLegacyShares(data);
+  }
+
+  async function handleDeleteLegacy(id) {
+    if (!confirm('Delete this legacy share? The recipient will no longer receive it.')) return;
+    const { error } = await supabase.from('legacy_shares').delete().eq('id', id);
+    if (error) { showToast('Failed to delete', 'error'); } 
+    else { showToast('Legacy share deleted'); setLegacyShares(prev => prev.filter(p => p.id !== id)); }
+  }
+
+  // ---------- GENERAL ----------
   async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = '/login';
   }
 
-  // Master key prompt
   function handleMasterKeySubmit(e) {
     e.preventDefault();
     if (masterKey.length < 1) return;
@@ -111,18 +145,12 @@ export default function DashboardClient({ userEmail, userId }) {
     setVaultUnlocked(true);
   }
 
-  // Filter passwords by search
-  const filtered = useMemo(() =>
-    passwords.filter(
-      (p) =>
-        p.site_name.toLowerCase().includes(search.toLowerCase()) ||
-        p.username.toLowerCase().includes(search.toLowerCase()) ||
-        (p.site_url && p.site_url.toLowerCase().includes(search.toLowerCase()))
-    ),
+  const filteredPasswords = useMemo(() =>
+    passwords.filter(p => p.site_name.toLowerCase().includes(search.toLowerCase()) || p.username.toLowerCase().includes(search.toLowerCase())),
     [passwords, search]
   );
 
-  // Master key prompt screen
+  // ---------- RENDER ----------
   if (showMasterKeyPrompt) {
     return (
       <div className="login-page">
@@ -137,24 +165,10 @@ export default function DashboardClient({ userEmail, userId }) {
           </div>
           <form className="glass-card login-form" onSubmit={handleMasterKeySubmit}>
             <div className="input-group">
-              <label htmlFor="master-key">Master Password</label>
-              <input
-                id="master-key"
-                type="password"
-                className="input"
-                placeholder="Enter your master password"
-                value={masterKey}
-                onChange={(e) => setMasterKey(e.target.value)}
-                required
-                autoFocus
-              />
+              <label>Master Password</label>
+              <input type="password" className="input" value={masterKey} onChange={(e) => setMasterKey(e.target.value)} required autoFocus />
             </div>
-            <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: '20px' }}>
-              Unlock Vault
-            </button>
-            <p style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-              For this MVP, use your login password as the master password.
-            </p>
+            <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: '20px' }}>Unlock Vault</button>
           </form>
         </div>
       </div>
@@ -170,74 +184,95 @@ export default function DashboardClient({ userEmail, userId }) {
       <Navbar email={userEmail || ''} onLogout={handleLogout} />
 
       <div className="dashboard-content">
-        <div className="dashboard-header">
-          <h2>Your Vault</h2>
-          <div className="dashboard-stats">
-            <span className="stat-badge">{passwords.length} entries</span>
+        <div className="dashboard-header flex-col" style={{ alignItems: 'flex-start', gap: '20px' }}>
+          <div className="flex-between" style={{ width: '100%' }}>
+            <h2>{activeTab === 'vault' ? 'Your Vault' : 'Legacy Shares'}</h2>
+            <div className="dashboard-stats">
+              <span className="stat-badge">
+                {activeTab === 'vault' ? passwords.length : legacyShares.length} entries
+              </span>
+            </div>
+          </div>
+          
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: '10px', width: '100%', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
+            <button 
+              className={`btn ${activeTab === 'vault' ? 'btn-primary' : 'glass-card'}`}
+              onClick={() => setActiveTab('vault')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none' }}
+            >
+              🔐 Password Vault
+            </button>
+            <button 
+              className={`btn ${activeTab === 'legacy' ? 'btn-primary' : 'glass-card'}`}
+              onClick={() => setActiveTab('legacy')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none' }}
+            >
+              ⏳ Dead Man's Switch
+            </button>
           </div>
         </div>
 
-        <div className="search-bar">
-          <div className="search-bar-wrapper">
-            <span className="search-bar-icon">🔍</span>
-            <input
-              type="text"
-              className="input"
-              placeholder="Search passwords..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        {activeTab === 'vault' && (
+          <div className="search-bar">
+            <div className="search-bar-wrapper">
+              <span className="search-bar-icon">🔍</span>
+              <input type="text" className="input" placeholder="Search passwords..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
           </div>
-        </div>
+        )}
 
         {loading ? (
-          <div className="empty-state">
-            <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">🔒</div>
-            <h3>{search ? 'No results found' : 'Your vault is empty'}</h3>
-            <p>{search ? 'Try a different search term' : 'Click the + button to add your first password'}</p>
-            {!search && (
-              <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                Add First Password
-              </button>
-            )}
-          </div>
+          <div className="empty-state"><div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} /></div>
+        ) : activeTab === 'vault' ? (
+          // VAULT VIEW
+          filteredPasswords.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🔒</div>
+              <h3>{search ? 'No results found' : 'Your vault is empty'}</h3>
+              {!search && <button className="btn btn-primary" onClick={() => setShowPasswordModal(true)}>Add Password</button>}
+            </div>
+          ) : (
+            <div className="password-grid">
+              {filteredPasswords.map(entry => (
+                <PasswordCard key={entry.id} entry={entry} onDecrypt={handleDecrypt} onDelete={handleDeletePassword} />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="password-grid">
-            {filtered.map((entry) => (
-              <PasswordCard
-                key={entry.id}
-                entry={entry}
-                onDecrypt={handleDecrypt}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+          // LEGACY VIEW
+          legacyShares.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">⏳</div>
+              <h3>No Legacy Shares</h3>
+              <p>Securely share messages or passwords if you are inactive.</p>
+              <button className="btn btn-primary" onClick={() => setShowLegacyModal(true)}>Create Legacy Share</button>
+            </div>
+          ) : (
+            <div className="password-grid">
+              {legacyShares.map(entry => (
+                <LegacyCard key={entry.id} entry={entry} onDelete={handleDeleteLegacy} />
+              ))}
+            </div>
+          )
         )}
       </div>
 
       {/* FAB */}
-      <button className="fab" onClick={() => setShowModal(true)} title="Add new password">
+      <button 
+        className="fab" 
+        onClick={() => activeTab === 'vault' ? setShowPasswordModal(true) : setShowLegacyModal(true)} 
+        title={`Add ${activeTab === 'vault' ? 'password' : 'legacy share'}`}
+      >
         +
       </button>
 
-      {/* Add Modal */}
-      {showModal && (
-        <AddPasswordModal
-          onClose={() => setShowModal(false)}
-          onAdd={handleAdd}
-        />
-      )}
+      {/* Modals */}
+      {showPasswordModal && <AddPasswordModal onClose={() => setShowPasswordModal(false)} onAdd={handleAddPassword} />}
+      {showLegacyModal && <AddLegacyModal onClose={() => setShowLegacyModal(false)} onAdd={handleAddLegacy} />}
 
       {/* Toast */}
-      {toast && (
-        <div className="toast-container">
-          <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-        </div>
-      )}
+      {toast && <div className="toast-container"><div className={`toast toast-${toast.type}`}>{toast.message}</div></div>}
     </div>
   );
 }

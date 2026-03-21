@@ -68,3 +68,27 @@ export async function decrypt(ciphertextB64, ivB64, password) {
 
   return new TextDecoder().decode(decrypted);
 }
+
+// A short list of unambiguous, easy-to-type words (BIP39 inspired)
+const WORD_LIST = [
+  "apple", "bird", "cloud", "dance", "earth", "fire", "ghost", "heart", "ice", "jump",
+  "kite", "lion", "moon", "night", "ocean", "plant", "quiet", "river", "star", "tree",
+  "umbrella", "valley", "water", "xylophone", "yellow", "zebra", "autumn", "breeze",
+  "candy", "dream", "eagle", "forest", "garden", "honey", "island", "jungle", "koala",
+  "lemon", "mountain", "nebula", "orange", "puzzle", "quartz", "rabbit", "sunset", "tiger",
+  "universe", "volcano", "window", "yacht", "action", "brave", "clever", "gentle", "happy",
+  "lucky", "magic", "noble", "peace", "proud", "rapid", "sacred", "silent", "strong", "truth"
+];
+
+/**
+ * Generate a secure 4-word passphrase.
+ */
+export function generatePassphrase() {
+  const words = [];
+  const array = new Uint32Array(4);
+  crypto.getRandomValues(array);
+  for (let i = 0; i < 4; i++) {
+    words.push(WORD_LIST[array[i] % WORD_LIST.length]);
+  }
+  return words.join('-');
+}
