@@ -48,7 +48,7 @@ export async function GET(request) {
       
       try {
         await resend.emails.send({
-          from: 'Vauriz Vault <onboarding@resend.dev>', // Update to a real verified domain when ready
+          from: 'Vauriz Vault <noreply@vauriz.com>', // Needs verified domain in Resend
           to: share.recipient_email,
           subject: 'A Legacy Message has been shared with you via Vauriz',
           html: `
