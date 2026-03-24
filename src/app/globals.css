@@ -959,3 +959,9 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fix for Select Dropdown Options */
+select.input option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
