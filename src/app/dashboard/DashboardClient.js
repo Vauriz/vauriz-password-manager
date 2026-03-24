@@ -50,6 +50,7 @@ export default function DashboardClient({ userEmail, userId }) {
       const { data: legacyData, error: legErr } = await supabase
         .from('legacy_shares')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (legErr) showToast('Failed to load legacy shares', 'error');

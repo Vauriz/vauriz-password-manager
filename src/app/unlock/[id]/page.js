@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import UnlockClient from './UnlockClient';
 
 export const dynamic = 'force-dynamic';
@@ -7,11 +7,10 @@ export default async function UnlockPage({ params }) {
   // In Next.js 15, params is a Promise that must be awaited
   const { id } = await params;
   
-  // createClient in the server is also an async function!
-  const supabase = await createClient();
+  // We use the admin client here to fetch the share securely by ID, bypassing RLS
+  const supabase = createAdminClient();
 
   // Try to fetch the legacy share
-  // Our RLS policy only allows reading if status = 'delivered'
   const { data: share, error } = await supabase
     .from('legacy_shares')
     .select('id, recipient_email, encrypted_payload, iv, status')
