@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { generatePassphrase } from '@/lib/crypto';
 
 export default function AddLegacyModal({ onClose, onAdd }) {
+  const [shareName, setShareName] = useState('');
   const [recipient, setRecipient] = useState('');
   const [message, setMessage] = useState('');
   const [timerInterval, setTimerInterval] = useState('14 days');
@@ -21,7 +22,7 @@ export default function AddLegacyModal({ onClose, onAdd }) {
     }
     setLoading(true);
     try {
-      await onAdd({ recipient, message, passphrase, timerInterval });
+      await onAdd({ shareName, recipient, message, passphrase, timerInterval });
       onClose();
     } catch (err) {
       console.error(err);
@@ -46,6 +47,17 @@ export default function AddLegacyModal({ onClose, onAdd }) {
         </p>
 
         <form onSubmit={handleSubmit} className="modal-form">
+          <div className="input-group">
+            <label>Share Name (Optional)</label>
+            <input
+              className="input"
+              type="text"
+              placeholder="e.g. Master Crypto Keys"
+              value={shareName}
+              onChange={(e) => setShareName(e.target.value)}
+            />
+          </div>
+
           <div className="input-group">
             <label>Recipient Email</label>
             <input

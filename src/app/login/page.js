@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -55,7 +56,7 @@ export default function LoginPage() {
 
       <div className="login-container">
         <div className="login-header">
-          <div className="login-logo">V</div>
+          <Image src="/logo.png" alt="Vauriz Logo" width={56} height={56} style={{ margin: '0 auto 16px', borderRadius: '12px', boxShadow: '0 0 30px rgba(124, 58, 237, 0.2)' }} />
           <h1>
             {isSignUp ? 'Create Account' : 'Welcome Back'}
           </h1>

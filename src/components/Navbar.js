@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 export default function Navbar({ email, onLogout }) {
   const [loggingOut, setLoggingOut] = useState(false);
@@ -13,7 +14,7 @@ export default function Navbar({ email, onLogout }) {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <div className="navbar-logo">V</div>
+        <Image src="/logo.png" alt="Vauriz Logo" width={32} height={32} style={{ borderRadius: '8px' }} />
         <span className="navbar-title">Vauriz</span>
       </div>
       <div className="navbar-actions">

@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import PasswordCard from '@/components/PasswordCard';
 import AddPasswordModal from '@/components/AddPasswordModal';
 import AddLegacyModal from '@/components/AddLegacyModal';
+import EditLegacyModal from '@/components/EditLegacyModal';
 import LegacyCard from '@/components/LegacyCard';
 
 export default function DashboardClient({ userEmail, userId }) {
@@ -25,6 +26,7 @@ export default function DashboardClient({ userEmail, userId }) {
   const [activeTab, setActiveTab] = useState('vault'); // 'vault' or 'legacy'
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLegacyModal, setShowLegacyModal] = useState(false);
+  const [editingLegacyShare, setEditingLegacyShare] = useState(null);
 
   // Show a toast notification
   function showToast(message, type = 'success') {
@@ -104,12 +106,13 @@ export default function DashboardClient({ userEmail, userId }) {
   }
 
   // ---------- LEGACY SHARES ACTIONS ----------
-  async function handleAddLegacy({ recipient, message, passphrase, timerInterval }) {
+  async function handleAddLegacy({ shareName, recipient, message, passphrase, timerInterval }) {
     // Encrypt the legacy message using the generated passphrase (not the master key!)
     const { ciphertext, iv } = await encrypt(message, passphrase);
     
     const { error } = await supabase.from('legacy_shares').insert({
       user_id: userId,
+      share_name: shareName || 'Unnamed Share',
       recipient_email: recipient,
       encrypted_payload: ciphertext,
       iv: iv,
@@ -124,6 +127,20 @@ export default function DashboardClient({ userEmail, userId }) {
     // Refresh
     const { data } = await supabase.from('legacy_shares').select('*').order('created_at', { ascending: false });
     if (data) setLegacyShares(data);
+  }
+
+  async function handleEditLegacy(id, { shareName, recipient, timerInterval }) {
+    const { error } = await supabase.from('legacy_shares').update({
+      share_name: shareName || 'Unnamed Share',
+      recipient_email: recipient,
+      timer_interval: timerInterval
+    }).eq('id', id);
+
+    if (error) { showToast('Failed to update', 'error'); } 
+    else { 
+      showToast('Legacy Share updated'); 
+      setLegacyShares(prev => prev.map(s => s.id === id ? { ...s, share_name: shareName || 'Unnamed Share', recipient_email: recipient, timer_interval: timerInterval } : s));
+    }
   }
 
   async function handleDeleteLegacy(id) {
@@ -252,7 +269,7 @@ export default function DashboardClient({ userEmail, userId }) {
           ) : (
             <div className="password-grid">
               {legacyShares.map(entry => (
-                <LegacyCard key={entry.id} entry={entry} onDelete={handleDeleteLegacy} />
+                <LegacyCard key={entry.id} entry={entry} onDelete={handleDeleteLegacy} onEdit={setEditingLegacyShare} />
               ))}
             </div>
           )
@@ -271,6 +288,7 @@ export default function DashboardClient({ userEmail, userId }) {
       {/* Modals */}
       {showPasswordModal && <AddPasswordModal onClose={() => setShowPasswordModal(false)} onAdd={handleAddPassword} />}
       {showLegacyModal && <AddLegacyModal onClose={() => setShowLegacyModal(false)} onAdd={handleAddLegacy} />}
+      {editingLegacyShare && <EditLegacyModal share={editingLegacyShare} onClose={() => setEditingLegacyShare(null)} onSave={handleEditLegacy} />}
 
       {/* Toast */}
       {toast && <div className="toast-container"><div className={`toast toast-${toast.type}`}>{toast.message}</div></div>}
