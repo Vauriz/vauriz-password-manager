@@ -9,6 +9,7 @@ import AddPasswordModal from '@/components/AddPasswordModal';
 import AddLegacyModal from '@/components/AddLegacyModal';
 import EditLegacyModal from '@/components/EditLegacyModal';
 import LegacyCard from '@/components/LegacyCard';
+import { getFeatureLimits } from '@/lib/billing';
 
 export default function DashboardClient({ userEmail, userId }) {
   const [supabase] = useState(() => createClient());
@@ -24,6 +25,7 @@ export default function DashboardClient({ userEmail, userId }) {
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   
   const [activeTab, setActiveTab] = useState('vault'); // 'vault' or 'legacy'
+  const [subscriptionStatus, setSubscriptionStatus] = useState('free');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLegacyModal, setShowLegacyModal] = useState(false);
   const [editingLegacyShare, setEditingLegacyShare] = useState(null);
@@ -57,7 +59,10 @@ export default function DashboardClient({ userEmail, userId }) {
 
       if (legErr) showToast('Failed to load legacy shares', 'error');
 
+      const { data: profile } = await supabase.from('profiles').select('subscription_status').eq('id', userId).single();
+
       if (!cancelled) {
+        if (profile) setSubscriptionStatus(profile.subscription_status);
         if (passData) setPasswords(passData);
         if (legacyData) {
           setLegacyShares(legacyData);
@@ -107,6 +112,14 @@ export default function DashboardClient({ userEmail, userId }) {
 
   // ---------- LEGACY SHARES ACTIONS ----------
   async function handleAddLegacy({ shareName, recipient, message, passphrase, timerInterval }) {
+    const limits = getFeatureLimits(subscriptionStatus);
+    if (legacyShares.length >= limits.maxLegacyShares) {
+      if (confirm('🔒 Free Plan Limit Reached\nYou can only have 1 active Legacy Share on the Free plan. Click OK to upgrade to Premium!')) {
+         window.location.href = '/pricing';
+      }
+      return;
+    }
+
     // Encrypt the legacy message using the generated passphrase (not the master key!)
     const { ciphertext, iv } = await encrypt(message, passphrase);
     
@@ -204,7 +217,17 @@ export default function DashboardClient({ userEmail, userId }) {
       <div className="dashboard-content">
         <div className="dashboard-header flex-col" style={{ alignItems: 'flex-start', gap: '20px' }}>
           <div className="flex-between" style={{ width: '100%' }}>
-            <h2>{activeTab === 'vault' ? 'Your Vault' : 'Legacy Shares'}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <h2>{activeTab === 'vault' ? 'Your Vault' : 'Legacy Shares'}</h2>
+              {subscriptionStatus === 'free' && (
+                <button 
+                  onClick={() => window.location.href = '/pricing'} 
+                  style={{ background: 'var(--accent-gradient)', color: 'white', border: 'none', padding: '4px 12px', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
             <div className="dashboard-stats">
               <span className="stat-badge">
                 {activeTab === 'vault' ? passwords.length : legacyShares.length} entries
