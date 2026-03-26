@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -25,6 +24,7 @@ export async function POST(req) {
         const userId = session.metadata.userId || session.client_reference_id;
         if (userId) {
           const status = session.mode === 'payment' ? 'lifetime' : 'premium';
+          const supabaseAdmin = createAdminClient();
           await supabaseAdmin.from('profiles').upsert({
              id: userId,
              stripe_customer_id: session.customer,
@@ -42,6 +42,7 @@ export async function POST(req) {
         const isActive = subscription.status === 'active' || subscription.status === 'trialing'; 
         
         // Find user by customer ID
+        const supabaseAdmin = createAdminClient();
         const { data: profile } = await supabaseAdmin.from('profiles')
           .select('id')
           .eq('stripe_customer_id', customerId)
