@@ -16,8 +16,8 @@ export async function POST(req) {
         },
       ],
       mode: mode, // 'subscription' or 'payment'
-      success_url: 'http://localhost:3000/dashboard?success=true',
-      cancel_url: 'http://localhost:3000/pricing',
+      success_url: `${req.headers.get('origin')}/dashboard?success=true`,
+      cancel_url: `${req.headers.get('origin')}/pricing`,
       client_reference_id: userId,
       metadata: {
         userId: userId,
