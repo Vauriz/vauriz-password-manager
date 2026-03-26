@@ -30,10 +30,10 @@ export async function middleware(request) {
   } = await supabase.auth.getUser();
 
   // Determine if the current path is a public path
-  const publicPaths = ['/', '/login', '/auth', '/unlock'];
-  const isPublicPath = publicPaths.some(path => 
-    request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`)
-  );
+  const isPublicPath = request.nextUrl.pathname === '/' || 
+                       request.nextUrl.pathname.startsWith('/login') || 
+                       request.nextUrl.pathname.startsWith('/unlock/') ||
+                       request.nextUrl.pathname.startsWith('/api/stripe/webhook');
 
   // If user is not signed in and path is not public, redirect to /login
   if (!user && !isPublicPath) {
