@@ -28,6 +28,7 @@ export default function DashboardClient({ userEmail, userId }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState('free');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLegacyModal, setShowLegacyModal] = useState(false);
+  const [showUpsellModal, setShowUpsellModal] = useState(false);
   const [editingLegacyShare, setEditingLegacyShare] = useState(null);
 
   // Show a toast notification
@@ -114,9 +115,7 @@ export default function DashboardClient({ userEmail, userId }) {
   async function handleAddLegacy({ shareName, recipient, message, passphrase, timerInterval }) {
     const limits = getFeatureLimits(subscriptionStatus);
     if (legacyShares.length >= limits.maxLegacyShares) {
-      if (confirm('🔒 Free Plan Limit Reached\nYou can only have 1 active Legacy Share on the Free plan. Click OK to upgrade to Premium!')) {
-         window.location.href = '/pricing';
-      }
+      setShowUpsellModal(true);
       return;
     }
 
@@ -215,15 +214,23 @@ export default function DashboardClient({ userEmail, userId }) {
       <Navbar email={userEmail || ''} onLogout={handleLogout} />
 
       <div className="dashboard-content">
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+          <div className="trust-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            Zero-Knowledge E2E Encrypted
+          </div>
+        </div>
         <div className="dashboard-header flex-col" style={{ alignItems: 'flex-start', gap: '20px' }}>
           <div className="flex-between" style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h2>{activeTab === 'vault' ? 'Your Vault' : 'Legacy Shares'}</h2>
               {subscriptionStatus === 'free' && (
                 <button 
-                  onClick={() => window.location.href = '/pricing'} 
-                  style={{ background: 'var(--accent-gradient)', color: 'white', border: 'none', padding: '4px 12px', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}
+                  onClick={() => setShowUpsellModal(true)} 
+                  className="btn btn-primary"
+                  style={{ backgroundImage: 'var(--accent-gradient)', border: 'none', padding: '6px 16px', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: 'var(--shadow-glow)' }}
                 >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                   Upgrade
                 </button>
               )}
@@ -312,6 +319,29 @@ export default function DashboardClient({ userEmail, userId }) {
       {showPasswordModal && <AddPasswordModal onClose={() => setShowPasswordModal(false)} onAdd={handleAddPassword} />}
       {showLegacyModal && <AddLegacyModal onClose={() => setShowLegacyModal(false)} onAdd={handleAddLegacy} />}
       {editingLegacyShare && <EditLegacyModal share={editingLegacyShare} onClose={() => setEditingLegacyShare(null)} onSave={handleEditLegacy} />}
+      
+      {/* Freemium Upsell Modal */}
+      {showUpsellModal && (
+        <div className="modal-overlay" onClick={() => setShowUpsellModal(false)}>
+          <div className="glass-card modal" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', padding: '40px 32px' }}>
+            <div style={{ background: 'var(--accent-glow)', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--accent-purple)' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            </div>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '12px' }}>Unlock Premium Access</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', lineHeight: '1.6' }}>
+              You've hit the limit of the Free plan! Upgrade to Premium to unlock <strong>Unlimited Legacy Shares</strong>, Priority Support, and advanced security triggers.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button className="btn btn-primary btn-full" onClick={() => window.location.href = '/pricing'} style={{ padding: '16px', fontSize: '1rem' }}>
+                View Pricing Plans
+              </button>
+              <button className="btn btn-secondary btn-full" onClick={() => setShowUpsellModal(false)}>
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && <div className="toast-container"><div className={`toast toast-${toast.type}`}>{toast.message}</div></div>}

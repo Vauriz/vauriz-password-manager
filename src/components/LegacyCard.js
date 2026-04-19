@@ -3,13 +3,16 @@ export default function LegacyCard({ entry, onDelete, onEdit }) {
   const statusClass = isDelivered ? 'delivered' : 'pending';
   
   return (
-    <div className={`glass-card legacy-card status-${statusClass}`}>
+    <div className={`glass-card legacy-card status-${statusClass}`} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       
       {/* Header section: Email and Actions */}
       <div className="legacy-card-header">
         <div className="legacy-info">
-          <span className="legacy-label">{entry.share_name || 'Unnamed Share'}</span>
-          <h3 className="legacy-email" title={entry.recipient_email}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span className="legacy-label" style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{entry.share_name || 'Unnamed Share'}</span>
+          </div>
+          <h3 className="legacy-email" title={entry.recipient_email} style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             {entry.recipient_email}
           </h3>
         </div>
